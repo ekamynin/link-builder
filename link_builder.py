@@ -77,6 +77,15 @@ def get_all_categories(df: pd.DataFrame) -> list[str]:
     return sorted(ua_cats)
 
 
+def filter_by_keywords(df: pd.DataFrame, keywords: list[str]) -> pd.DataFrame:
+    """Filter by free-text keywords against categories field (for advanced tab)."""
+    if not keywords:
+        return df
+    cats_lower = df["categories"].str.lower().fillna("")
+    mask = cats_lower.apply(lambda c: any(kw.lower() in c for kw in keywords))
+    return df[mask]
+
+
 def filter_by_categories(df: pd.DataFrame, selected_ua: list[str]) -> pd.DataFrame:
     """Keep only sites that have at least one of the selected Ukrainian categories."""
     if not selected_ua:
