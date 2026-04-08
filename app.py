@@ -84,9 +84,9 @@ def render_results(df_result: pd.DataFrame, budget: float, label: str):
             "Тематика": cats[:60] + "…" if len(cats) > 60 else cats,
             "DR": int(row["dr"]),
             "Органічний трафік": f"{int(row['organic_traffic']):,}",
-            "DA Moz": int(row["da_moz"]),
             "% Органіки": f"{row['pct_organic']:.0f}%",
-            "Сума наростаючим (грн)": f"{int(row['cumulative_price']):,}",
+            "Ціна написання": f"{int(row['price_writing']):,} грн" if row.get("price_writing") else "Не пишуть",
+            "Бюджет витрачено (грн)": f"{int(row['cumulative_price']):,}",
             "Чому підходить": build_why_suitable(row),
             "Посилання на майданчик": row["collaborator_url"],
         })
@@ -192,7 +192,6 @@ with tab1:
             "organic_traffic_min": traffic_min_t1,
             "pct_organic_min": pct_organic_t1,
             "total_traffic_min": 5000,
-            "da_min": 15,
             "ukraine_only": ukraine_t1,
             "excluded_domains": excluded_list,
         }
@@ -249,11 +248,6 @@ with tab2:
             value=20, min_value=0, max_value=100, key="dr_t2",
             help="Domain Rating. Чим вище — тим авторитетніший сайт."
         )
-        da_min_t2 = st.number_input(
-            "DA Moz мін (авторитетність за Moz)",
-            value=15, min_value=0, max_value=100, key="da_t2",
-            help="Domain Authority від Moz. Ще один показник авторитетності."
-        )
         traffic_min_t2 = st.number_input(
             "Органічний трафік мін (відвідувачів/міс)",
             value=15000, step=1000, key="tr_t2",
@@ -284,7 +278,6 @@ with tab2:
 
         criteria_t2 = {
             "dr_min": dr_min_t2,
-            "da_min": da_min_t2,
             "organic_traffic_min": traffic_min_t2,
             "total_traffic_min": total_traffic_min_t2,
             "pct_organic_min": pct_organic_t2,

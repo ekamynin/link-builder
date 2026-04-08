@@ -92,10 +92,13 @@ def parse_site(item: dict) -> dict:
     """Convert raw API item to a clean dict with numeric values."""
     prices = item.get("prices", [])
     price = None
+    price_writing = None
     link_type = None
     if prices:
         price = parse_price(prices[0].get("pricePublication"))
         link_type = prices[0].get("linkType", "")
+        raw_spelling = prices[0].get("priceSpelling", "")
+        price_writing = parse_price(raw_spelling) if raw_spelling else None
 
     total_traffic = parse_metric(item.get("traffic", ""))
     organic_traffic = parse_metric(item.get("organicTraffic", ""))
@@ -115,6 +118,7 @@ def parse_site(item: dict) -> dict:
         "referral_domains": parse_metric(item.get("referralDomains", "0")),
         "backlinks": parse_metric(item.get("backlinks", "0")),
         "price": price,
+        "price_writing": price_writing,
         "link_type": link_type,
         "site_type": item.get("siteType", ""),
         "domain_zone": item.get("domainZone", ""),

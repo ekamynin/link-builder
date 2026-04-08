@@ -39,8 +39,6 @@ def apply_hard_filters(df: pd.DataFrame, criteria: dict) -> pd.DataFrame:
         mask &= df["pct_organic"] >= criteria["pct_organic_min"]
     if criteria.get("total_traffic_min") is not None:
         mask &= df["total_traffic"] >= criteria["total_traffic_min"]
-    if criteria.get("da_min") is not None:
-        mask &= df["da_moz"] >= criteria["da_min"]
     if criteria.get("ukraine_only"):
         mask &= df["country"].str.contains("Ukraine", case=False, na=False) | df["domain"].str.endswith(".ua")
     if criteria.get("price_max") is not None:
@@ -79,8 +77,9 @@ def score_sites(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def select_donors(df: pd.DataFrame, quantity: int, budget: float) -> pd.DataFrame:
-    """Select up to `quantity` donors whose cumulative price ≤ budget."""
-    df = df.sort_values("score", ascending=False).reset_index(drop=True)
+    """Select up to `quantity` donors whose cumulative price ≤ budget.
+    Sorted by price ascending to maximise count within budget."""
+    df = df.sort_values("price", ascending=True).reset_index(drop=True)
 
     selected = []
     cumulative = 0.0
