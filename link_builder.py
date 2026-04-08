@@ -1,29 +1,24 @@
 import pandas as pd
 
-# Default niche keyword map — keywords checked against site `categories` field
-NICHES: dict[str, list[str]] = {
-    "Авто": ["auto", "car", "transport", "vehicle", "moto", "авто", "транспорт", "мото"],
-    "Нерухомість": ["real estate", "property", "realty", "нерухомість", "будівництво", "construction"],
-    "Фінанси": ["finance", "money", "banking", "credit", "insurance", "invest", "фінанси", "банк", "кредит"],
-    "Здоров'я": ["health", "medicine", "medical", "pharmacy", "здоров", "медицин", "фармац"],
-    "Краса": ["beauty", "fashion", "cosmetic", "краса", "мода", "косметик"],
-    "Технології": ["technology", "tech", "it", "software", "digital", "gadget", "технолог", "цифров"],
-    "Дім та сад": ["home", "garden", "interior", "dacha", "furniture", "дім", "сад", "ремонт", "меблі"],
-    "Подорожі": ["travel", "tourism", "hotel", "tour", "подорож", "туризм", "відпочинок"],
-    "Їжа": ["food", "cooking", "recipe", "restaurant", "їжа", "кулінарія", "ресторан"],
-    "Бізнес": ["business", "entrepreneurship", "startup", "marketing", "бізнес", "маркетинг"],
-    "Спорт": ["sport", "fitness", "gym", "спорт", "фітнес", "тренуванн"],
-    "Юридичні": ["legal", "law", "lawyer", "юридич", "право", "адвокат"],
-    "Новини та ЗМІ": ["news", "media", "press", "новини", "змі", "видання"],
-    "Освіта": ["education", "learning", "school", "university", "освіта", "навчанн", "школа"],
-}
+def get_all_categories(df: pd.DataFrame) -> list[str]:
+    """Extract sorted unique categories from loaded dataframe."""
+    cats = set()
+    for raw in df["categories"].dropna():
+        for cat in raw.split(","):
+            cat = cat.strip()
+            if cat:
+                cats.add(cat)
+    return sorted(cats)
 
 
-def filter_by_niche(df: pd.DataFrame, keywords: list[str]) -> pd.DataFrame:
-    if not keywords:
+def filter_by_categories(df: pd.DataFrame, selected: list[str]) -> pd.DataFrame:
+    """Keep only sites that have at least one of the selected categories."""
+    if not selected:
         return df
-    cats_lower = df["categories"].str.lower().fillna("")
-    mask = cats_lower.apply(lambda c: any(kw.lower() in c for kw in keywords))
+    selected_set = {c.lower() for c in selected}
+    def matches(raw):
+        return any(c.strip().lower() in selected_set for c in raw.split(","))
+    mask = df["categories"].fillna("").apply(matches)
     return df[mask]
 
 
