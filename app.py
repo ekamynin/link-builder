@@ -120,6 +120,10 @@ def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame, budget: float
     col2.metric("💰 Залишок бюджету", f"{int(budget_remaining):,} грн")
     col3.metric("🔗 Донорів підібрано", len(df_result))
 
+    used_pct = total_spent / budget * 100
+    if used_pct < 50:
+        st.info(f"ℹ️ Використано лише {used_pct:.0f}% бюджету. Щоб отримати якісніших донорів — підвищи мінімальний DR або органічний трафік.")
+
     # Extra recommendations within remaining budget
     if budget_remaining > 0:
         selected_domains = set(df_result["domain"])

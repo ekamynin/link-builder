@@ -57,24 +57,23 @@ def apply_hard_filters(df: pd.DataFrame, criteria: dict) -> pd.DataFrame:
 
 
 def score_sites(df: pd.DataFrame) -> pd.DataFrame:
-    """Add normalized score column. Higher = better value."""
+    """Add quality score (DR + traffic only, no price). Higher = better quality."""
     df = df.copy()
     dr_max = df["dr"].max() or 1
     traffic_max = df["organic_traffic"].max() or 1
-    price_max = df["price"].max() or 1
 
     df["score"] = (
-        (df["dr"] / dr_max) * 0.35
-        + (df["organic_traffic"] / traffic_max) * 0.35
-        + (1 - df["price"] / price_max) * 0.30
+        (df["dr"] / dr_max) * 0.50
+        + (df["organic_traffic"] / traffic_max) * 0.50
     )
     return df
 
 
 def select_donors(df: pd.DataFrame, quantity: int, budget: float) -> pd.DataFrame:
     """Select up to `quantity` donors whose cumulative price ≤ budget.
-    Sorted by price ascending to maximise count within budget."""
-    df = df.sort_values("price", ascending=True).reset_index(drop=True)
+    Sorted by quality (DR + traffic) descending — best sites first,
+    skip if individual price exceeds remaining budget."""
+    df = df.sort_values("score", ascending=False).reset_index(drop=True)
 
     selected = []
     cumulative = 0.0
