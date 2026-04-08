@@ -85,7 +85,7 @@ def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame, budget: float
             "DR": int(row["dr"]),
             "Органічний трафік": f"{int(row['organic_traffic']):,}",
             "% Органіки": f"{row['pct_organic']:.0f}%",
-            "Ціна написання": f"{int(row['price_writing']):,} грн" if row.get("price_writing") else "Не пишуть",
+            "Ціна написання": f"{int(row['price_writing']):,} грн" if pd.notna(row["price_writing"]) and row["price_writing"] else "Не пишуть",
             "Бюджет витрачено (грн)": f"{int(row['cumulative_price']):,}",
             "Чому підходить": build_why_suitable(row),
             "Посилання на майданчик": row["collaborator_url"],
