@@ -20,28 +20,14 @@ st.set_page_config(
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ⚙️ Налаштування API")
-    api_key = st.text_input(
-        "Collaborator API Key",
-        value="hH0Zieka-iOKh-gLoJonsRYU0-MxOXXAFsnHjxw0ZII2N9PFgYwa72fXSOAM8DXT",
-        type="password",
-    )
+    st.markdown("## ⚙️ Налаштування")
     st.divider()
-
-    with st.expander("🔧 Розширені фільтри завантаження", expanded=False):
-        st.caption("Ці фільтри застосовуються ще на етапі завантаження. Змінюй лише якщо знаєш навіщо.")
-        api_dr_min = st.number_input("DR мін", value=20, min_value=0, max_value=100)
-        api_traffic_min = st.number_input("Органічний трафік мін", value=5000, min_value=0, step=1000)
-        api_da_min = st.number_input("DA Moz мін", value=10, min_value=0, max_value=100)
-        api_price_min = st.number_input("Ціна від (грн)", value=0, min_value=0, step=100)
-        api_price_max = st.number_input("Ціна до (грн)", value=0, min_value=0, step=500,
-                                         help="0 = без обмеження")
-
-    st.divider()
-    load_btn = st.button("🔄 Завантажити майданчики", use_container_width=True, type="primary")
 
     if "df_loaded" in st.session_state:
-        st.success(f"✅ Завантажено {len(st.session_state['df_loaded'])} майданчиків")
+        st.success(f"✅ {len(st.session_state['df_loaded'])} майданчиків завантажено")
+        if st.button("🔄 Оновити дані", use_container_width=True):
+            del st.session_state["df_loaded"]
+            st.rerun()
 
     st.divider()
     st.caption("Link Builder v1.0")
@@ -49,36 +35,34 @@ with st.sidebar:
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 def load_data(api_key, dr_min, traffic_min, da_min, price_min, price_max):
-    progress = st.progress(0, text="Завантаження…")
+    progress = st.progress(0, text="Завантаження сторінки 1…")
 
     def cb(done, total):
-        pct = int(done / total * 100)
-        progress.progress(pct, text=f"Завантаження сторінки {done} із {total}…")
+        progress.progress(int(done / total * 100), text=f"Завантаження сторінки {done} із {total}…")
 
     items, _ = fetch_all_sites(
         api_key,
         dr_min=dr_min,
         traffic_min=traffic_min,
         da_min=da_min,
-        price_min=price_min if price_min > 0 else None,
-        price_max=price_max if price_max > 0 else None,
+        price_min=price_min,
+        price_max=price_max,
         progress_callback=cb,
     )
     progress.empty()
     return pd.DataFrame([parse_site(i) for i in items])
 
 
-if load_btn:
-    if not api_key:
-        st.sidebar.error("Введіть API Key")
-    else:
-        with st.spinner("Підключаємось до бази майданчиків…"):
-            try:
-                df = load_data(api_key, api_dr_min, api_traffic_min, api_da_min, api_price_min, api_price_max)
-                st.session_state["df_loaded"] = df
-                st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Помилка: {e}")
+API_KEY = "hH0Zieka-iOKh-gLoJonsRYU0-MxOXXAFsnHjxw0ZII2N9PFgYwa72fXSOAM8DXT"
+
+if "df_loaded" not in st.session_state:
+    with st.spinner("Завантажуємо майданчики…"):
+        try:
+            df = load_data(API_KEY, 20, 5000, 10, None, None)
+            st.session_state["df_loaded"] = df
+            st.rerun()
+        except Exception as e:
+            st.error(f"Помилка завантаження даних: {e}")
 
 
 # ── Result renderer ───────────────────────────────────────────────────────────
@@ -137,11 +121,7 @@ def render_results(df_result: pd.DataFrame, budget: float, label: str):
 st.title("🔗 Link Builder")
 st.caption("Підбір донорів для лінкбілдингу")
 
-data_ready = "df_loaded" in st.session_state
 df_all: pd.DataFrame = st.session_state.get("df_loaded", pd.DataFrame())
-
-if not data_ready:
-    st.info("👈 Для початку натисни **Завантажити майданчики** в лівій панелі.")
 
 tab1, tab2 = st.tabs(["📁 За тематикою", "⚙️ Власні параметри"])
 
@@ -204,7 +184,7 @@ with tab1:
             help="Фільтрує за доменом .ua або країною Ukraine"
         )
 
-    if st.button("🔍 Підібрати донорів", key="run_t1", type="primary", use_container_width=True, disabled=not data_ready):
+    if st.button("🔍 Підібрати донорів", key="run_t1", type="primary", use_container_width=True, disabled=df_all.empty):
         excluded_list = [d.strip() for raw in excluded_t1.replace(",", "\n").splitlines() for d in [raw.strip()] if d]
 
         criteria = {
@@ -298,7 +278,7 @@ with tab2:
             help="Фільтр за доменом .ua або країною Ukraine"
         )
 
-    if st.button("🔍 Підібрати донорів", key="run_t2", type="primary", use_container_width=True, disabled=not data_ready):
+    if st.button("🔍 Підібрати донорів", key="run_t2", type="primary", use_container_width=True, disabled=df_all.empty):
         excluded_list_t2 = [d.strip() for raw in excluded_t2.replace(",", "\n").splitlines() for d in [raw.strip()] if d]
         niche_keywords_t2 = [kw.strip() for kw in niche_manual.split(",") if kw.strip()]
 
