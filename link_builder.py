@@ -1,23 +1,94 @@
+import re
 import pandas as pd
 
+# Translation map: Collaborator English category → Ukrainian
+CATEGORY_TRANSLATIONS = {
+    "Business and Finance":               "Бізнес та фінанси",
+    "City portals":                       "Міські портали",
+    "Computer games":                     "Комп'ютерні ігри",
+    "Construction and repair":            "Будівництво та ремонт",
+    "Cooking":                            "Кулінарія",
+    "Cryptocurrencies":                   "Криптовалюти",
+    "Culture and art":                    "Культура та мистецтво",
+    "Dacha":                              "Дача",
+    "Education and Science":              "Освіта та наука",
+    "Electronics and Technology":         "Електроніка та технології",
+    "Entertainment and hobbies":          "Розваги та хобі",
+    "Fashion and beauty":                 "Мода та краса",
+    "Furniture and interior":             "Меблі та інтер'єр",
+    "Health and medicine":                "Здоров'я та медицина",
+    "Home and family":                    "Дім та сім'я",
+    "Internet":                           "Інтернет",
+    "Law and jurisprudence":              "Право та юриспруденція",
+    "laws":                               "Право та юриспруденція",  # normalize duplicate
+    "Logistics and cargo transportation": "Логістика та вантажоперевезення",
+    "Manufacturing and agriculture":      "Виробництво та агробізнес",
+    "Marketing":                          "Маркетинг",
+    "Media (News)":                       "ЗМІ (Новини)",
+    "Mobile technology":                  "Мобільні технології",
+    "Other":                              "Інше",
+    "Pets":                               "Домашні тварини",
+    "politics":                           "Політика",
+    "Programs (Soft)":                    "Програмне забезпечення",
+    "Psychology":                         "Психологія",
+    "Real estate":                        "Нерухомість",
+    "SEO":                                "SEO",
+    "Society":                            "Суспільство",
+    "Sport":                              "Спорт",
+    "Technologies":                       "Технології",
+    "Tourism and travel":                 "Туризм та подорожі",
+    "Web design":                         "Веб-дизайн",
+    "Web development":                    "Веб-розробка",
+    "Work":                               "Робота",
+    # Already Ukrainian — keep as-is
+    "Авто та мото":                       "Авто та мото",
+    "Астрологія та езотерика":            "Астрологія та езотерика",
+    "Лайфстал":                           "Лайфстайл",
+    "Шопінг (сайти для покупок, купони)":  "Шопінг",
+}
+
+# Reverse map: Ukrainian display name → list of original Collaborator values
+def _build_reverse_map():
+    reverse = {}
+    for orig, ua in CATEGORY_TRANSLATIONS.items():
+        reverse.setdefault(ua, []).append(orig)
+    return reverse
+
+REVERSE_CATEGORY_MAP = _build_reverse_map()
+
+
+def _split_categories(raw: str) -> list[str]:
+    """Split categories string, handling parentheses with commas inside."""
+    # Replace commas inside parentheses temporarily
+    clean = re.sub(r"\(([^)]*),([^)]*)\)", lambda m: f"({m.group(1)}COMMA{m.group(2)})", raw)
+    parts = [p.strip().replace("COMMA", ",") for p in clean.split(",")]
+    return [p for p in parts if p]
+
+
 def get_all_categories(df: pd.DataFrame) -> list[str]:
-    """Extract sorted unique categories from loaded dataframe."""
-    cats = set()
+    """Extract sorted unique Ukrainian category names from loaded dataframe."""
+    ua_cats = set()
     for raw in df["categories"].dropna():
-        for cat in raw.split(","):
-            cat = cat.strip()
-            if cat:
-                cats.add(cat)
-    return sorted(cats)
+        for cat in _split_categories(raw):
+            ua = CATEGORY_TRANSLATIONS.get(cat.strip(), cat.strip())
+            if ua:
+                ua_cats.add(ua)
+    return sorted(ua_cats)
 
 
-def filter_by_categories(df: pd.DataFrame, selected: list[str]) -> pd.DataFrame:
-    """Keep only sites that have at least one of the selected categories."""
-    if not selected:
+def filter_by_categories(df: pd.DataFrame, selected_ua: list[str]) -> pd.DataFrame:
+    """Keep only sites that have at least one of the selected Ukrainian categories."""
+    if not selected_ua:
         return df
-    selected_set = {c.lower() for c in selected}
+    # Build set of all original Collaborator values for selected UA categories
+    originals = set()
+    for ua in selected_ua:
+        for orig in REVERSE_CATEGORY_MAP.get(ua, [ua]):
+            originals.add(orig.lower())
+
     def matches(raw):
-        return any(c.strip().lower() in selected_set for c in raw.split(","))
+        return any(c.strip().lower() in originals for c in _split_categories(raw))
+
     mask = df["categories"].fillna("").apply(matches)
     return df[mask]
 
