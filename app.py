@@ -151,7 +151,7 @@ def render_results(df_result: pd.DataFrame, budget: float, site_topic: str):
 
 # ── Main UI ───────────────────────────────────────────────────────────────────
 st.title("🔗 Link Builder")
-st.caption("Підбір донорів для лінкбілдингу через Collaborator.pro API")
+st.caption("Підбір донорів для лінкбілдингу")
 
 if "df_loaded" not in st.session_state:
     st.info("👈 Натисніть **Завантажити дані** в бічній панелі для початку роботи.")
