@@ -56,7 +56,7 @@ def load_data(api_key, dr_min, traffic_min, da_min, price_min, price_max):
 API_KEY = "hH0Zieka-iOKh-gLoJonsRYU0-MxOXXAFsnHjxw0ZII2N9PFgYwa72fXSOAM8DXT"
 
 if "df_loaded" not in st.session_state:
-    with st.spinner("Завантажуємо майданчики…"):
+    with st.spinner("Зачекайте, будь ласка, завантажуємо майданчики з Collaborator…"):
         try:
             df = load_data(API_KEY, 20, 5000, 10, None, None)
             st.session_state["df_loaded"] = df
