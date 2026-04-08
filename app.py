@@ -66,7 +66,7 @@ if "df_loaded" not in st.session_state:
 
 
 # ── Result renderer ───────────────────────────────────────────────────────────
-def render_results(df_result: pd.DataFrame, budget: float, label: str):
+def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame, budget: float, label: str):
     if df_result.empty:
         st.warning("Не знайдено донорів у рамках бюджету та критеріїв. Спробуй послабити фільтри.")
         return
@@ -101,9 +101,22 @@ def render_results(df_result: pd.DataFrame, budget: float, label: str):
     col2.metric("💰 Залишок бюджету", f"{int(budget_remaining):,} грн")
     col3.metric("🔗 Донорів підібрано", len(df_result))
 
-    st.markdown("#### Топ-3 рекомендації")
-    for i, (_, row) in enumerate(df_result.head(3).iterrows(), 1):
-        st.markdown(f"**{i}. [{row['domain']}]({row['collaborator_url']})** — {build_why_suitable(row)}")
+    # Extra recommendations within remaining budget
+    if budget_remaining > 0:
+        selected_domains = set(df_result["domain"])
+        extras = (
+            df_pool[
+                ~df_pool["domain"].isin(selected_domains)
+                & (df_pool["price"] <= budget_remaining)
+                & df_pool["price"].notna()
+            ]
+            .sort_values("price", ascending=True)
+            .head(5)
+        )
+        if not extras.empty:
+            st.markdown(f"#### 💡 Рекомендуємо додатково — вписуються в залишок **{int(budget_remaining):,} грн**")
+            for _, row in extras.iterrows():
+                st.markdown(f"- **[{row['domain']}]({row['collaborator_url']})** — {int(row['price']):,} грн | {build_why_suitable(row)}")
 
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
@@ -204,9 +217,10 @@ with tab1:
         if df_filtered.empty:
             st.warning("Жоден майданчик не пройшов фільтри. Спробуй знизити мінімальні пороги.")
         else:
-            df_result = select_donors(score_sites(df_filtered), quantity_t1, budget_t1)
+            df_scored_t1 = score_sites(df_filtered)
+            df_result = select_donors(df_scored_t1, quantity_t1, budget_t1)
             label = f"{my_site_t1 or selected_niche} ({selected_niche})"
-            render_results(df_result, budget_t1, label)
+            render_results(df_result, df_scored_t1, budget_t1, label)
 
 
 # ── Tab 2: Custom params ──────────────────────────────────────────────────────
@@ -295,6 +309,7 @@ with tab2:
         if df_filtered_t2.empty:
             st.warning("Жоден майданчик не пройшов фільтри. Спробуй знизити мінімальні пороги.")
         else:
-            df_result_t2 = select_donors(score_sites(df_filtered_t2), quantity_t2, budget_t2)
+            df_scored_t2 = score_sites(df_filtered_t2)
+            df_result_t2 = select_donors(df_scored_t2, quantity_t2, budget_t2)
             label_t2 = f"{my_site_t2 or 'сайт'} ({niche_manual or 'будь-яка ніша'})"
-            render_results(df_result_t2, budget_t2, label_t2)
+            render_results(df_result_t2, df_scored_t2, budget_t2, label_t2)
