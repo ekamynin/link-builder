@@ -153,16 +153,15 @@ def render_results(df_result: pd.DataFrame, budget: float, site_topic: str):
 st.title("🔗 Link Builder")
 st.caption("Підбір донорів для лінкбілдингу")
 
-if "df_loaded" not in st.session_state:
-    st.info("👈 Натисніть **Завантажити дані** в бічній панелі для початку роботи.")
-    st.stop()
-
-df_all: pd.DataFrame = st.session_state["df_loaded"]
-
 tab1, tab2 = st.tabs(["📁 За тематикою", "⚙️ Власні параметри"])
+
+data_ready = "df_loaded" in st.session_state
+df_all: pd.DataFrame = st.session_state.get("df_loaded", pd.DataFrame())
 
 # ── Tab 1: By niche ───────────────────────────────────────────────────────────
 with tab1:
+    if not data_ready:
+        st.info("👈 Натисніть **Завантажити дані** в бічній панелі для початку роботи.")
     st.markdown("### Підбір за нішою")
     st.caption("Оберіть тематику — система автоматично відфільтрує відповідні донори.")
 
@@ -185,7 +184,7 @@ with tab1:
         pct_organic_t1 = st.slider("% органіки мін", 0, 100, 30, key="pct_t1")
         ukraine_t1 = st.checkbox("Тільки Україна (.ua / country=Ukraine)", value=True, key="ua_t1")
 
-    if st.button("🔍 Підібрати донорів", key="run_t1", type="primary", use_container_width=True):
+    if st.button("🔍 Підібрати донорів", key="run_t1", type="primary", use_container_width=True, disabled=not data_ready):
         excluded_list = [
             d.strip()
             for raw in excluded_t1.replace(",", "\n").splitlines()
@@ -221,6 +220,8 @@ with tab1:
 
 # ── Tab 2: Custom params ──────────────────────────────────────────────────────
 with tab2:
+    if not data_ready:
+        st.info("👈 Натисніть **Завантажити дані** в бічній панелі для початку роботи.")
     st.markdown("### Власні параметри")
     st.caption("Повний контроль над фільтрацією та ранжуванням.")
 
@@ -257,7 +258,7 @@ with tab2:
                                         help="0 = без обмеження", key="pmax_t2")
         ukraine_t2 = st.checkbox("Тільки Україна (.ua / country=Ukraine)", value=True, key="ua_t2")
 
-    if st.button("🔍 Підібрати донорів", key="run_t2", type="primary", use_container_width=True):
+    if st.button("🔍 Підібрати донорів", key="run_t2", type="primary", use_container_width=True, disabled=not data_ready):
         excluded_list_t2 = [
             d.strip()
             for raw in excluded_t2.replace(",", "\n").splitlines()
