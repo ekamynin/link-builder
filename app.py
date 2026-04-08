@@ -111,7 +111,7 @@ def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame,
         verified = ah.get("dr") is not None
         rows.append({
             "#": rank,
-            "Домен": row["collaborator_url"],          # URL for LinkColumn
+            "Домен": row["domain"],
             "Ціна (грн)": int(row["price"]),
             "Тематика": translate_categories(row.get("categories", "")),
             "DR": f"{int(dr_val)} ✓" if verified else str(int(dr_val)),
@@ -124,6 +124,7 @@ def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame,
             ),
             "Бюджет витрачено (грн)": int(row["cumulative_price"]),
             "Чому підходить": build_why_suitable(row),
+            "Переглянути": row["collaborator_url"],
         })
 
     df_display = pd.DataFrame(rows)
@@ -134,13 +135,13 @@ def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame,
         use_container_width=True,
         hide_index=True,
         column_config={
-            "Домен": st.column_config.LinkColumn(
-                "Домен",
-                display_text=r"https://collaborator\.pro/ua/creator/article/view\?id=\d+",
-                help="Відкрити майданчик на Collaborator"
-            ),
             "Ціна (грн)": st.column_config.NumberColumn("Ціна (грн)", format="%d"),
             "Бюджет витрачено (грн)": st.column_config.NumberColumn("Бюджет витрачено (грн)", format="%d"),
+            "Переглянути": st.column_config.LinkColumn(
+                "Переглянути",
+                display_text="🔗 Collaborator",
+                help="Відкрити майданчик на Collaborator"
+            ),
         },
     )
 
