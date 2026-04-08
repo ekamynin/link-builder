@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 
 from collaborator_api import fetch_all_sites, parse_site
+from ahrefs_api import enrich_with_ahrefs
 from link_builder import (
     apply_hard_filters,
     build_why_suitable,
@@ -21,6 +22,13 @@ st.set_page_config(
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚙️ Налаштування")
+    st.divider()
+    ahrefs_key = st.text_input(
+        "Ahrefs API Key",
+        value="89U1AoQWNDJqnYh4CD4yLnDwqJ1oKXmyFYzw_Ks8",
+        type="password",
+        help="Якщо вказаний — DR і трафік у результатах будуть перевірені через Ahrefs"
+    )
     st.divider()
 
     if "df_loaded" in st.session_state:
@@ -66,10 +74,16 @@ if "df_loaded" not in st.session_state:
 
 
 # ── Result renderer ───────────────────────────────────────────────────────────
-def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame, budget: float, label: str):
+def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame, budget: float, label: str, ahrefs_key: str = ""):
     if df_result.empty:
         st.warning("Не знайдено донорів у рамках бюджету та критеріїв. Спробуй послабити фільтри.")
         return
+
+    # Enrich with Ahrefs if key provided
+    ahrefs_data = {}
+    if ahrefs_key:
+        with st.spinner("Перевіряємо DR і трафік через Ahrefs…"):
+            ahrefs_data = enrich_with_ahrefs(ahrefs_key, df_result["domain"].tolist())
 
     total_spent = df_result["price"].sum()
     budget_remaining = budget - total_spent
@@ -77,13 +91,18 @@ def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame, budget: float
     rows = []
     for rank, (_, row) in enumerate(df_result.iterrows(), 1):
         cats = row.get("categories", "")
+        ah = ahrefs_data.get(row["domain"], {})
+        dr_val = ah.get("dr") if ah.get("dr") is not None else row["dr"]
+        tr_val = ah.get("org_traffic") if ah.get("org_traffic") is not None else row["organic_traffic"]
+        dr_label = f"{int(dr_val)} ✓" if ah.get("dr") is not None else str(int(dr_val))
+        tr_label = f"{int(tr_val):,} ✓" if ah.get("org_traffic") is not None else f"{int(tr_val):,}"
         rows.append({
             "#": rank,
             "Домен": row["domain"],
             "Ціна (грн)": f"{int(row['price']):,}",
             "Тематика": cats[:60] + "…" if len(cats) > 60 else cats,
-            "DR": int(row["dr"]),
-            "Органічний трафік": f"{int(row['organic_traffic']):,}",
+            "DR": dr_label,
+            "Органічний трафік": tr_label,
             "% Органіки": f"{row['pct_organic']:.0f}%",
             "Ціна написання": f"{int(row['price_writing']):,} грн" if pd.notna(row["price_writing"]) and row["price_writing"] else "Не пишуть",
             "Бюджет витрачено (грн)": f"{int(row['cumulative_price']):,}",
@@ -225,7 +244,7 @@ with tab1:
                 df_scored_t1 = score_sites(df_filtered)
                 df_result = select_donors(df_scored_t1, quantity_t1, budget_t1)
                 label = f"{my_site_t1 or cats_label}"
-                render_results(df_result, df_scored_t1, budget_t1, label)
+                render_results(df_result, df_scored_t1, budget_t1, label, ahrefs_key)
 
 
 # ── Tab 2: Custom params ──────────────────────────────────────────────────────
@@ -317,4 +336,4 @@ with tab2:
             df_scored_t2 = score_sites(df_filtered_t2)
             df_result_t2 = select_donors(df_scored_t2, quantity_t2, budget_t2)
             label_t2 = f"{my_site_t2 or 'сайт'} ({niche_manual or 'будь-яка ніша'})"
-            render_results(df_result_t2, df_scored_t2, budget_t2, label_t2)
+            render_results(df_result_t2, df_scored_t2, budget_t2, label_t2, ahrefs_key)
