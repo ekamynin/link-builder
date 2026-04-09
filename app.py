@@ -31,7 +31,15 @@ AHREFS_KEY  = st.secrets.get("AHREFS_API_KEY", "")
 # ── Cached API fetch ──────────────────────────────────────────────────────────
 @st.cache_data(ttl=21600, show_spinner=False)
 def fetch_sites_cached(api_key: str) -> pd.DataFrame:
+    """Tab 1: pre-filtered dataset (DR≥20, traffic≥5000)."""
     items, _ = fetch_all_sites(api_key, dr_min=20, traffic_min=5000, da_min=10)
+    return pd.DataFrame([parse_site(i) for i in items])
+
+
+@st.cache_data(ttl=21600, show_spinner=False)
+def fetch_sites_all_cached(api_key: str) -> pd.DataFrame:
+    """Tab 2: all available sites, no pre-filtering."""
+    items, _ = fetch_all_sites(api_key, dr_min=0, traffic_min=0, da_min=0)
     return pd.DataFrame([parse_site(i) for i in items])
 
 
@@ -63,7 +71,9 @@ if "df_loaded" not in st.session_state:
     with st.spinner("Зачекайте, будь ласка, завантажуємо майданчики з Collaborator…"):
         try:
             df = fetch_sites_cached(COLLAB_KEY)
+            df_all_sites = fetch_sites_all_cached(COLLAB_KEY)
             st.session_state["df_loaded"] = df
+            st.session_state["df_all_sites"] = df_all_sites
             st.session_state["loaded_at"] = datetime.now().strftime("%d.%m.%Y %H:%M")
             st.rerun()
         except Exception as e:
@@ -194,6 +204,7 @@ st.title("🔗 Link Builder")
 st.caption("Підбір донорів для лінкбілдингу")
 
 df_all: pd.DataFrame = st.session_state.get("df_loaded", pd.DataFrame())
+df_all_unrestricted: pd.DataFrame = st.session_state.get("df_all_sites", pd.DataFrame())
 all_cats = get_all_categories(df_all) if not df_all.empty else []
 
 tab1, tab2 = st.tabs(["📁 За тематикою", "⚙️ Власні параметри"])
@@ -328,7 +339,7 @@ with tab2:
         ukraine_t2 = st.checkbox("Тільки українські сайти", value=True, key="ua_t2")
 
     if st.button("🔍 Підібрати донорів", key="run_t2", type="primary",
-                 use_container_width=True, disabled=df_all.empty):
+                 use_container_width=True, disabled=df_all_unrestricted.empty):
         if budget_t2 <= 0:
             st.warning("⚠️ Вкажи бюджет більше 0.")
         elif quantity_t2 <= 0:
@@ -341,17 +352,17 @@ with tab2:
             ]
             niche_kw = [kw.strip() for kw in niche_manual.split(",") if kw.strip()]
             criteria_t2 = {
-                "dr_min": dr_min_t2,
-                "organic_traffic_min": traffic_min_t2,
-                "total_traffic_min": total_traffic_min_t2,
-                "pct_organic_min": pct_organic_t2,
+                "dr_min": dr_min_t2 if dr_min_t2 > 0 else None,
+                "organic_traffic_min": traffic_min_t2 if traffic_min_t2 > 0 else None,
+                "total_traffic_min": total_traffic_min_t2 if total_traffic_min_t2 > 0 else None,
+                "pct_organic_min": pct_organic_t2 if pct_organic_t2 > 0 else None,
                 "price_min": price_min_t2 if price_min_t2 > 0 else None,
                 "price_max": price_max_t2 if price_max_t2 > 0 else None,
                 "ukraine_only": ukraine_t2,
                 "excluded_domains": excluded_list_t2,
             }
-            df_work = filter_by_keywords(df_all, niche_kw) if niche_kw else df_all.copy()
-            df_filtered_t2 = apply_hard_filters(df_work, criteria_t2)
+            df_work = filter_by_keywords(df_all_unrestricted, niche_kw) if niche_kw else df_all_unrestricted.copy()
+            df_filtered_t2 = apply_hard_filters(df_work, criteria_t2, strict=False)
             st.caption(f"За тематикою: {len(df_work)} сайтів → після фільтрів: {len(df_filtered_t2)}")
 
             if df_filtered_t2.empty:

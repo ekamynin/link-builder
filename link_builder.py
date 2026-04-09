@@ -103,8 +103,11 @@ def filter_by_categories(df: pd.DataFrame, selected_ua: list[str]) -> pd.DataFra
     return df[mask]
 
 
-def apply_hard_filters(df: pd.DataFrame, criteria: dict) -> pd.DataFrame:
-    """Apply mandatory threshold filters. Returns filtered copy."""
+def apply_hard_filters(df: pd.DataFrame, criteria: dict, strict: bool = True) -> pd.DataFrame:
+    """Apply threshold filters. Returns filtered copy.
+    strict=True  → also removes red-flag sites (Tab 1).
+    strict=False → only applies criteria set by the user (Tab 2).
+    """
     mask = pd.Series(True, index=df.index)
 
     if criteria.get("dr_min") is not None:
@@ -128,10 +131,12 @@ def apply_hard_filters(df: pd.DataFrame, criteria: dict) -> pd.DataFrame:
         mask &= ~df["domain"].str.lower().isin(excluded)
 
     # Red flag: very high DR + near-zero organic traffic (manipulated metrics)
-    red_flag = (df["dr"] > 50) & (df["organic_traffic"] < 500)
-    mask &= ~red_flag
+    # Only applied in strict mode (Tab 1). Tab 2 trusts the user's own judgement.
+    if strict:
+        red_flag = (df["dr"] > 50) & (df["organic_traffic"] < 500)
+        mask &= ~red_flag
 
-    # Price must exist
+    # Price must exist (required for budget calculations)
     mask &= df["price"].notna()
 
     return df[mask].copy()
