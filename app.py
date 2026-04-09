@@ -96,10 +96,17 @@ def translate_categories(raw: str) -> str:
 
 
 def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame,
-                   budget: float, label: str):
+                   budget: float, label: str, quantity: int = 0):
     if df_result.empty:
         st.warning("⚠️ Не знайдено донорів у рамках бюджету та критеріїв. Спробуй знизити мінімальні пороги або збільшити бюджет.")
         return
+
+    if quantity and len(df_result) < quantity:
+        found = len(df_result)
+        st.warning(
+            f"⚠️ Запитано **{quantity}** донорів, але за вказаними параметрами знайдено лише **{found}**. "
+            f"Спробуй знизити мінімальний DR або трафік, розширити тематику або збільшити бюджет."
+        )
 
     # Ahrefs enrichment
     ahrefs_data = {}
@@ -298,7 +305,7 @@ with tab1:
             else:
                 df_scored = score_sites(df_filtered)
                 df_result = select_donors(df_scored, quantity_t1, budget_t1)
-                render_results(df_result, df_scored, budget_t1, my_site_t1 or cats_label)
+                render_results(df_result, df_scored, budget_t1, my_site_t1 or cats_label, quantity_t1)
 
 
 # ── Tab 2 ─────────────────────────────────────────────────────────────────────
@@ -371,4 +378,4 @@ with tab2:
                 df_scored_t2 = score_sites(df_filtered_t2)
                 df_result_t2 = select_donors(df_scored_t2, quantity_t2, budget_t2)
                 label_t2 = f"{my_site_t2 or 'сайт'} ({niche_manual or 'всі категорії'})"
-                render_results(df_result_t2, df_scored_t2, budget_t2, label_t2)
+                render_results(df_result_t2, df_scored_t2, budget_t2, label_t2, quantity_t2)
