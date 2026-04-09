@@ -71,9 +71,7 @@ if "df_loaded" not in st.session_state:
     with st.spinner("Зачекайте, будь ласка, завантажуємо майданчики з Collaborator…"):
         try:
             df = fetch_sites_cached(COLLAB_KEY)
-            df_all_sites = fetch_sites_all_cached(COLLAB_KEY)
             st.session_state["df_loaded"] = df
-            st.session_state["df_all_sites"] = df_all_sites
             st.session_state["loaded_at"] = datetime.now().strftime("%d.%m.%Y %H:%M")
             st.rerun()
         except Exception as e:
@@ -211,7 +209,6 @@ st.title("🔗 Link Builder")
 st.caption("Підбір донорів для лінкбілдингу")
 
 df_all: pd.DataFrame = st.session_state.get("df_loaded", pd.DataFrame())
-df_all_unrestricted: pd.DataFrame = st.session_state.get("df_all_sites", pd.DataFrame())
 all_cats = get_all_categories(df_all) if not df_all.empty else []
 
 tab1, tab2 = st.tabs(["📁 За тематикою", "⚙️ Власні параметри"])
@@ -346,12 +343,22 @@ with tab2:
         ukraine_t2 = st.checkbox("Тільки українські сайти", value=True, key="ua_t2")
 
     if st.button("🔍 Підібрати донорів", key="run_t2", type="primary",
-                 use_container_width=True, disabled=df_all_unrestricted.empty):
+                 use_container_width=True, disabled=df_all.empty):
         if budget_t2 <= 0:
             st.warning("⚠️ Вкажи бюджет більше 0.")
         elif quantity_t2 <= 0:
             st.warning("⚠️ Кількість донорів має бути більше 0.")
         else:
+            # Lazy-load unrestricted dataset on first use
+            if "df_all_sites" not in st.session_state:
+                with st.spinner("Завантажуємо повну базу майданчиків…"):
+                    try:
+                        st.session_state["df_all_sites"] = fetch_sites_all_cached(COLLAB_KEY)
+                    except Exception as e:
+                        st.error(f"❌ Помилка завантаження даних: {e}")
+                        st.stop()
+            df_all_unrestricted = st.session_state["df_all_sites"]
+
             excluded_list_t2 = [
                 d.strip()
                 for raw in excluded_t2.replace(",", "\n").splitlines()
