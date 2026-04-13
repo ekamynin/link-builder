@@ -117,36 +117,58 @@ def translate_categories(raw: str) -> str:
 
 
 def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame,
-                   budget: float, label: str, quantity: int = 0):
+                   budget: float, label: str, quantity: int = 0,
+                   exclude_spike: bool = True, exclude_penalty: bool = True):
     if df_result.empty:
         st.warning("⚠️ Не знайдено донорів у рамках бюджету та критеріїв. Спробуй знизити мінімальні пороги або збільшити бюджет.")
         return
 
-    if quantity and len(df_result) < quantity:
-        found = len(df_result)
-        st.warning(
-            f"⚠️ Запитано **{quantity}** донорів, але за вказаними параметрами знайдено лише **{found}**. "
-            f"Спробуй знизити мінімальний DR або трафік, розширити тематику або збільшити бюджет."
-        )
-
-    # Ahrefs enrichment
+    # Ahrefs enrichment (DR, traffic + 24-month history analysis)
     ahrefs_data = {}
     if AHREFS_KEY:
-        with st.spinner("Перевіряємо DR і трафік через Ahrefs…"):
+        with st.spinner("Перевіряємо DR, трафік і історію через Ahrefs…"):
             try:
                 ahrefs_data = enrich_with_ahrefs(AHREFS_KEY, df_result["domain"].tolist())
             except Exception:
                 pass
 
+    # Filter out suspicious sites if requested
+    if AHREFS_KEY and (exclude_spike or exclude_penalty):
+        excluded_domains = []
+        keep_rows = []
+        for _, row in df_result.iterrows():
+            status = ahrefs_data.get(row["domain"], {}).get("traffic_status", "ok")
+            if (status == "spike" and exclude_spike) or (status == "penalty" and exclude_penalty):
+                excluded_domains.append(row["domain"])
+            else:
+                keep_rows.append(row)
+        if excluded_domains:
+            labels = [ahrefs_data[d]["traffic_label"] for d in excluded_domains]
+            details = ", ".join(f"**{d}** ({l})" for d, l in zip(excluded_domains, labels))
+            st.warning(f"🚫 Виключено {len(excluded_domains)} майданчиків за підозрілим трафіком: {details}")
+            df_result = pd.DataFrame(keep_rows).reset_index(drop=True)
+        if df_result.empty:
+            st.warning("⚠️ Всі підібрані майданчики виявились підозрілими. Спробуй змінити критерії.")
+            return
+
+    if quantity and len(df_result) < quantity:
+        st.warning(
+            f"⚠️ Запитано **{quantity}** донорів, але за вказаними параметрами знайдено лише **{len(df_result)}**. "
+            f"Спробуй знизити мінімальний DR або трафік, розширити тематику або збільшити бюджет."
+        )
+
     total_spent = df_result["price"].sum()
     budget_remaining = budget - total_spent
 
     rows = []
+    cumulative = 0.0
     for rank, (_, row) in enumerate(df_result.iterrows(), 1):
         ah = ahrefs_data.get(row["domain"], {})
-        dr_val  = ah.get("dr")          if ah.get("dr")          is not None else row["dr"]
-        tr_val  = ah.get("org_traffic") if ah.get("org_traffic") is not None else row["organic_traffic"]
+        dr_val   = ah.get("dr")          if ah.get("dr")          is not None else row["dr"]
+        tr_val   = ah.get("org_traffic") if ah.get("org_traffic") is not None else row["organic_traffic"]
         verified = ah.get("dr") is not None
+        traffic_label = ah.get("traffic_label", "")
+        cumulative += row["price"]
         rows.append({
             "#": rank,
             "Домен": row["domain"],
@@ -160,8 +182,9 @@ def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame,
                 if pd.notna(row.get("price_writing")) and row.get("price_writing")
                 else "Не пишуть"
             ),
-            "Бюджет витрачено (грн)": int(row["cumulative_price"]),
+            "Бюджет витрачено (грн)": int(cumulative),
             "Чому підходить": build_why_suitable(row),
+            "Трафік": traffic_label,
             "Переглянути": row["collaborator_url"],
         })
 
@@ -292,6 +315,17 @@ with tab1:
             "Тільки українські сайти",
             value=True, key="ua_t1",
         )
+        st.markdown("#### Захист від накрутки")
+        exclude_spike_t1 = st.checkbox(
+            "⚠️ Виключати підозрілий трафік (накрутка)",
+            value=True, key="ex_spike_t1",
+            help="Виключає сайти, у яких трафік різко зріс після тривалого нуля.",
+        )
+        exclude_penalty_t1 = st.checkbox(
+            "📉 Виключати сайти після апдейту Google",
+            value=True, key="ex_pen_t1",
+            help="Виключає сайти, що втратили 70%+ трафіку і не відновились.",
+        )
 
     if st.button("🔍 Підібрати донорів", key="run_t1", type="primary",
                  use_container_width=True, disabled=df_all.empty):
@@ -321,7 +355,8 @@ with tab1:
             else:
                 df_scored = score_sites(df_filtered)
                 df_result = select_donors(df_scored, quantity_t1, budget_t1)
-                render_results(df_result, df_scored, budget_t1, my_site_t1 or cats_label, quantity_t1)
+                render_results(df_result, df_scored, budget_t1, my_site_t1 or cats_label, quantity_t1,
+                               exclude_spike=exclude_spike_t1, exclude_penalty=exclude_penalty_t1)
 
 
 # ── Tab 2 ─────────────────────────────────────────────────────────────────────
@@ -360,6 +395,17 @@ with tab2:
         price_max_t2 = st.number_input("Ціна до (грн)", value=0, min_value=0, step=500,
                                         help="0 = без обмеження", key="pmax_t2")
         ukraine_t2 = st.checkbox("Тільки українські сайти", value=True, key="ua_t2")
+        st.markdown("#### Захист від накрутки")
+        exclude_spike_t2 = st.checkbox(
+            "⚠️ Виключати підозрілий трафік (накрутка)",
+            value=True, key="ex_spike_t2",
+            help="Виключає сайти, у яких трафік різко зріс після тривалого нуля.",
+        )
+        exclude_penalty_t2 = st.checkbox(
+            "📉 Виключати сайти після апдейту Google",
+            value=True, key="ex_pen_t2",
+            help="Виключає сайти, що втратили 70%+ трафіку і не відновились.",
+        )
 
     if st.button("🔍 Підібрати донорів", key="run_t2", type="primary",
                  use_container_width=True, disabled=df_all.empty):
@@ -400,4 +446,5 @@ with tab2:
                 df_scored_t2 = score_sites(df_filtered_t2)
                 df_result_t2 = select_donors(df_scored_t2, quantity_t2, budget_t2)
                 label_t2 = f"{my_site_t2 or 'сайт'} ({niche_manual or 'всі категорії'})"
-                render_results(df_result_t2, df_scored_t2, budget_t2, label_t2, quantity_t2)
+                render_results(df_result_t2, df_scored_t2, budget_t2, label_t2, quantity_t2,
+                               exclude_spike=exclude_spike_t2, exclude_penalty=exclude_penalty_t2)
