@@ -55,7 +55,7 @@ with st.sidebar:
         if loaded_at:
             st.caption(f"Оновлено: {loaded_at}")
         if st.button("🔄 Оновити дані", use_container_width=True,
-                     help="Примусово завантажити свіжі дані з Collaborator"):
+                     help="⚠️ Скине кеш і завантажить свіжі дані з Collaborator. Займе до хвилини."):
             st.cache_data.clear()
             del st.session_state["df_loaded"]
             st.rerun()
@@ -81,6 +81,11 @@ if "df_loaded" not in st.session_state:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+def sanitize_filename(name: str) -> str:
+    """Remove characters unsafe for filenames."""
+    return re.sub(r"[^\w\-.]", "_", name[:40])
+
+
 def normalize_domain(raw: str) -> str:
     """Strip protocol, www, trailing slashes and paths.
     Handles: donpion.ua / https://donpion.ua / www.donpion.ua / https://www.donpion.ua/path
@@ -235,17 +240,15 @@ def render_results(df_result: pd.DataFrame, df_pool: pd.DataFrame,
                     f"{int(row['price']):,} грн | {build_why_suitable(row)}"
                 )
 
-    # Excel export (with real domain names, not URLs)
-    export_df = df_display.copy()
-    export_df["Домен"] = df_result["domain"].values
+    # Excel export
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        export_df.to_excel(writer, index=False, sheet_name="Донори")
+        df_display.to_excel(writer, index=False, sheet_name="Донори")
     buf.seek(0)
     st.download_button(
         "📥 Завантажити Excel",
         data=buf,
-        file_name=f"donors_{label[:30].replace(' ', '_')}.xlsx",
+        file_name=f"donors_{sanitize_filename(label)}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
@@ -256,6 +259,10 @@ st.caption("Підбір донорів для лінкбілдингу")
 
 df_all: pd.DataFrame = st.session_state.get("df_loaded", pd.DataFrame())
 all_cats = get_all_categories(df_all) if not df_all.empty else []
+
+if df_all.empty and "df_loaded" in st.session_state:
+    st.error("❌ База майданчиків порожня. Перевір API-ключ Collaborator або натисни «Оновити дані».")
+    st.stop()
 
 tab1, tab2 = st.tabs(["📁 За тематикою", "⚙️ Власні параметри"])
 
@@ -388,8 +395,8 @@ with tab2:
         st.markdown("#### Мінімальні вимоги")
         dr_min_t2 = st.number_input("DR мін", value=20, min_value=0, max_value=100, key="dr_t2",
                                      help="Domain Rating від Ahrefs.")
-        traffic_min_t2 = st.number_input("Органічний трафік мін", value=15000, step=1000, key="tr_t2")
-        total_traffic_min_t2 = st.number_input("Загальний трафік мін", value=5000, step=500, key="tt_t2")
+        traffic_min_t2 = st.number_input("Органічний трафік мін", value=15000, min_value=0, max_value=10_000_000, step=1000, key="tr_t2")
+        total_traffic_min_t2 = st.number_input("Загальний трафік мін", value=5000, min_value=0, max_value=10_000_000, step=500, key="tt_t2")
         pct_organic_t2 = st.slider("Мінімальна частка органіки (%)", 0, 100, 30, key="pct_t2")
         price_min_t2 = st.number_input("Ціна від (грн)", value=0, min_value=0, step=100, key="pmin_t2")
         price_max_t2 = st.number_input("Ціна до (грн)", value=0, min_value=0, step=500,
@@ -413,6 +420,10 @@ with tab2:
             st.warning("⚠️ Вкажи бюджет більше 0.")
         elif quantity_t2 <= 0:
             st.warning("⚠️ Кількість донорів має бути більше 0.")
+        elif price_max_t2 > 0 and price_min_t2 > 0 and price_max_t2 < price_min_t2:
+            st.warning("⚠️ «Ціна до» не може бути меншою за «Ціна від». Виправ діапазон цін.")
+        elif traffic_min_t2 > 0 and total_traffic_min_t2 > 0 and traffic_min_t2 > total_traffic_min_t2:
+            st.warning("⚠️ Органічний трафік не може перевищувати загальний. Виправ значення.")
         else:
             # Lazy-load unrestricted dataset on first use
             if "df_all_sites" not in st.session_state:
