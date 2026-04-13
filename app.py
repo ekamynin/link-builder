@@ -95,24 +95,38 @@ def normalize_domain(raw: str) -> str:
     d = re.sub(r"^www\.", "", d)        # remove www.
     d = d.split("/")[0]                 # remove path
     d = d.split("?")[0]                 # remove query string
+    d = _decode_punycode(d)             # xn--... → знаю.укр
     return d
 
 
+def _decode_punycode(domain: str) -> str:
+    """Convert xn-- punycode labels to unicode (e.g. xn--80ans3e.xn--j1amh → знаю.укр)."""
+    try:
+        parts = domain.split(".")
+        decoded = []
+        for part in parts:
+            if part.startswith("xn--") and len(part) > 4:
+                decoded.append(part[4:].encode("ascii").decode("punycode"))
+            else:
+                decoded.append(part)
+        return ".".join(decoded)
+    except Exception:
+        return domain
+
+
 def is_valid_domain(d: str) -> bool:
-    """Check that string looks like a real domain: letters/digits/hyphens, at least one dot, valid TLD."""
-    # Must contain a dot
+    """Check that string looks like a real domain (including IDN/Cyrillic)."""
     if "." not in d:
         return False
-    # Only valid domain characters
-    if not re.match(r"^[a-z0-9.\-]+$", d):
+    # Reject clearly invalid characters
+    if re.search(r'[\s"\'<>{}\[\]\\|^`#@!$%&*+=]', d):
         return False
     parts = d.split(".")
-    # Each part must be non-empty and TLD at least 2 chars
     if any(len(p) == 0 for p in parts):
         return False
     if len(parts[-1]) < 2:
         return False
-    # Must not be only digits (e.g. "123.456")
+    # Reject if all parts are pure digits (IP-like)
     if all(p.isdigit() for p in parts):
         return False
     return True
