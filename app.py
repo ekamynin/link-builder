@@ -91,11 +91,13 @@ def normalize_domain(raw: str) -> str:
     Handles: donpion.ua / https://donpion.ua / www.donpion.ua / https://www.donpion.ua/path
     """
     d = raw.strip().lower()
-    d = re.sub(r"^https?://", "", d)   # remove protocol
-    d = re.sub(r"^www\.", "", d)        # remove www.
-    d = d.split("/")[0]                 # remove path
-    d = d.split("?")[0]                 # remove query string
-    d = _decode_punycode(d)             # xn--... → знаю.укр
+    d = re.sub(r'^[\s"\'«»„""\(\[\{]+', "", d)   # strip leading quotes/brackets
+    d = re.sub(r'[\s"\'«»„""\)\]\}]+$', "", d)   # strip trailing quotes/brackets
+    d = re.sub(r"^https?://", "", d)              # remove protocol
+    d = re.sub(r"^www\.", "", d)                  # remove www.
+    d = d.split("/")[0]                            # remove path
+    d = d.split("?")[0]                            # remove query string
+    d = _decode_punycode(d)                        # xn--... → знаю.укр
     return d
 
 
