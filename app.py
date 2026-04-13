@@ -1,4 +1,5 @@
 import io
+import re
 from datetime import datetime
 
 import pandas as pd
@@ -80,6 +81,28 @@ if "df_loaded" not in st.session_state:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+def normalize_domain(raw: str) -> str:
+    """Strip protocol, www, trailing slashes and paths.
+    Handles: donpion.ua / https://donpion.ua / www.donpion.ua / https://www.donpion.ua/path
+    """
+    d = raw.strip().lower()
+    d = re.sub(r"^https?://", "", d)   # remove protocol
+    d = re.sub(r"^www\.", "", d)        # remove www.
+    d = d.split("/")[0]                 # remove path
+    d = d.split("?")[0]                 # remove query string
+    return d
+
+
+def parse_excluded(text: str) -> list:
+    """Parse excluded domains textarea — one per line or comma-separated."""
+    domains = []
+    for raw in text.replace(",", "\n").splitlines():
+        d = normalize_domain(raw)
+        if d:
+            domains.append(d)
+    return domains
+
+
 def translate_categories(raw: str) -> str:
     """Translate comma-separated categories to Ukrainian."""
     parts = [p.strip() for p in raw.split(",") if p.strip()]
@@ -279,11 +302,7 @@ with tab1:
         elif quantity_t1 <= 0:
             st.warning("⚠️ Кількість донорів має бути більше 0.")
         else:
-            excluded_list = [
-                d.strip()
-                for raw in excluded_t1.replace(",", "\n").splitlines()
-                for d in [raw.strip()] if d
-            ]
+            excluded_list = parse_excluded(excluded_t1)
             criteria = {
                 "dr_min": dr_min_t1,
                 "organic_traffic_min": traffic_min_t1,
@@ -359,11 +378,7 @@ with tab2:
                         st.stop()
             df_all_unrestricted = st.session_state["df_all_sites"]
 
-            excluded_list_t2 = [
-                d.strip()
-                for raw in excluded_t2.replace(",", "\n").splitlines()
-                for d in [raw.strip()] if d
-            ]
+            excluded_list_t2 = parse_excluded(excluded_t2)
             niche_kw = [kw.strip() for kw in niche_manual.split(",") if kw.strip()]
             criteria_t2 = {
                 "dr_min": dr_min_t2 if dr_min_t2 > 0 else None,
