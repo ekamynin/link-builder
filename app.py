@@ -98,14 +98,38 @@ def normalize_domain(raw: str) -> str:
     return d
 
 
-def parse_excluded(text: str) -> list:
-    """Parse excluded domains textarea — one per line or comma-separated."""
-    domains = []
+def is_valid_domain(d: str) -> bool:
+    """Check that string looks like a real domain: letters/digits/hyphens, at least one dot, valid TLD."""
+    # Must contain a dot
+    if "." not in d:
+        return False
+    # Only valid domain characters
+    if not re.match(r"^[a-z0-9.\-]+$", d):
+        return False
+    parts = d.split(".")
+    # Each part must be non-empty and TLD at least 2 chars
+    if any(len(p) == 0 for p in parts):
+        return False
+    if len(parts[-1]) < 2:
+        return False
+    # Must not be only digits (e.g. "123.456")
+    if all(p.isdigit() for p in parts):
+        return False
+    return True
+
+
+def parse_excluded(text: str) -> tuple:
+    """Parse excluded domains textarea. Returns (valid_list, invalid_list)."""
+    valid, invalid = [], []
     for raw in text.replace(",", "\n").splitlines():
         d = normalize_domain(raw)
-        if d:
-            domains.append(d)
-    return domains
+        if not d:
+            continue
+        if is_valid_domain(d):
+            valid.append(d)
+        else:
+            invalid.append(raw.strip())
+    return valid, invalid
 
 
 def translate_categories(raw: str) -> str:
@@ -343,7 +367,9 @@ with tab1:
         elif quantity_t1 <= 0:
             st.warning("⚠️ Кількість донорів має бути більше 0.")
         else:
-            excluded_list = parse_excluded(excluded_t1)
+            excluded_list, invalid_t1 = parse_excluded(excluded_t1)
+            if invalid_t1:
+                st.warning(f"⚠️ Пропущено некоректні записи: {', '.join(invalid_t1)}")
             criteria = {
                 "dr_min": dr_min_t1,
                 "organic_traffic_min": traffic_min_t1,
@@ -435,7 +461,9 @@ with tab2:
                         st.stop()
             df_all_unrestricted = st.session_state["df_all_sites"]
 
-            excluded_list_t2 = parse_excluded(excluded_t2)
+            excluded_list_t2, invalid_t2 = parse_excluded(excluded_t2)
+            if invalid_t2:
+                st.warning(f"⚠️ Пропущено некоректні записи: {', '.join(invalid_t2)}")
             niche_kw = [kw.strip() for kw in niche_manual.split(",") if kw.strip()]
             criteria_t2 = {
                 "dr_min": dr_min_t2 if dr_min_t2 > 0 else None,
